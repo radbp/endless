@@ -1,0 +1,15 @@
+# Normalize line endings on checkin; check out with LF everywhere.
+* text=auto eol=lf
+
+# Lockfiles are generated — collapse them in diffs and reviews.
+uv.lock linguist-generated=true -diff
+pnpm-lock.yaml linguist-generated=true -diff
+
+# Binary assets
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.avif binary
+*.ico binary
+*.pdf binary
