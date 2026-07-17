@@ -20,24 +20,54 @@ A single-tenant, Shopify-style jewelry ecommerce platform, built as a **modular 
 
 ## Prerequisites
 
-- [uv](https://docs.astral.sh/uv/) (manages Python 3.12 for you)
-- Docker + Docker Compose (local Postgres and Redis)
+- Docker + Docker Compose
+- [uv](https://docs.astral.sh/uv/) — only for the hot-reload workflow; it manages Python 3.12 for you
 
-## Quickstart
+## Quickstart — everything in Docker
+
+Builds the API image and starts it alongside Postgres and Redis. The API waits for both to report healthy before it boots.
 
 ```bash
-uv sync              # install dependencies into .venv
-make up              # start Postgres + Redis
-make dev             # run the API at http://localhost:8080
+docker compose up --build          # add -d to run detached
 ```
 
 Check it:
 
 ```bash
-curl localhost:8080/healthz   # {"status":"ok",...}
+curl localhost:8080/healthz        # {"status":"ok","service":"endless-api","version":"0.1.0"}
 curl localhost:8080/readyz
-open http://localhost:8080/docs
+open http://localhost:8080/docs    # interactive Swagger UI
+docker compose ps                  # all three should read "healthy"
 ```
+
+Tear down with `docker compose down` (add `-v` to also drop the Postgres and Redis volumes).
+
+| Service | Port | Notes |
+|---|---|---|
+| `api` | 8080 | FastAPI, built from `Dockerfile`, runs non-root |
+| `postgres` | 5432 | Postgres 16 — `endless` / `endless` / db `endless` |
+| `redis` | 6379 | Redis 7, append-only on |
+
+> The API does not connect to Postgres or Redis yet — those pools are wired in **F0.6**, which is why `/readyz` reports an empty `checks` object. They run now so the wiring has something to talk to the moment it lands.
+
+## Quickstart — hot reload (day-to-day loop)
+
+Dependencies in Docker, API on your host so edits reload instantly:
+
+```bash
+uv sync              # install dependencies into .venv
+make up              # Postgres + Redis only
+make dev             # API at http://localhost:8080, --reload on
+```
+
+If `uv` isn't found, add it to your PATH: `export PATH="$HOME/.local/bin:$PATH"`.
+
+## Frontends
+
+Not built yet — they land as their own tickets with their own Dockerfiles and compose services:
+
+- `web/storefront` — Next.js 15 SSR, port 3000 (**F1.11**)
+- `web/admin` — Vite + React SPA, port 5173 (**F1.14**)
 
 ## Common tasks
 
@@ -48,6 +78,7 @@ make test            # unit tests — no env vars, no Docker required
 make integration     # integration tests (real Postgres/Redis via testcontainers)
 make build           # build the Docker image
 make format          # apply ruff autofixes + formatting
+make down            # stop the local stack
 ```
 
 Run a single test:

@@ -1,7 +1,41 @@
-# Local development dependencies only. These credentials are throwaway values
-# for containers that never leave this machine — deployed environments take
-# theirs from Key Vault (CLAUDE.md §1.3).
+# Local development stack.
+#
+# Credentials here are throwaway values for containers that never leave this
+# machine — deployed environments read theirs from Key Vault (CLAUDE.md §1.3).
+#
+# Two ways to work:
+#   docker compose up --build     everything in Docker, closest to production
+#   make up && make dev           deps in Docker, API on the host with hot reload
 services:
+  api:
+    build:
+      context: .
+    image: endless:dev
+    environment:
+      ENDLESS_ENVIRONMENT: local
+      ENDLESS_LOG_LEVEL: INFO
+      # Consumed once the DB and Redis pools are wired in F0.6. Hostnames are
+      # the compose service names, not localhost.
+      ENDLESS_DATABASE_URL: postgresql+asyncpg://endless:endless@postgres:5432/endless
+      ENDLESS_REDIS_URL: redis://redis:6379/0
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen("http://localhost:8080/healthz")
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
   postgres:
     image: postgres:16-alpine
     environment:
@@ -30,6 +64,21 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+
+  # The worker runs this same image with a different command. Uncommented in
+  # F0.6, when app/worker/main.py and the outbox drain exist.
+  #
+  # worker:
+  #   image: endless:dev
+  #   command: ["arq", "app.worker.main.WorkerSettings"]
+  #   depends_on: [postgres, redis]
+
+  # Frontends are not written yet — they arrive as their own tickets and get
+  # their own Dockerfiles. Adding services for them now would only break
+  # `docker compose up`.
+  #
+  # storefront:  Next.js 15 SSR, port 3000  — F1.11
+  # admin:       Vite + React SPA, port 5173 — F1.14
 
 volumes:
   postgres-data:
