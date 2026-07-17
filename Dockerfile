@@ -5,7 +5,7 @@
 # Multi-stage so that uv, pip, and their caches stay in the builder and never
 # reach the runtime image.
 
-FROM python:3.12-slim AS builder
+FROM python:3.14-slim AS builder
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
@@ -28,7 +28,7 @@ COPY app ./app
 RUN uv sync --frozen --no-dev
 
 
-FROM python:3.12-slim AS runtime
+FROM python:3.14-slim AS runtime
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
