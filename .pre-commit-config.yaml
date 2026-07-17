@@ -1,0 +1,44 @@
+default_install_hook_types: [pre-commit, commit-msg]
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: check-merge-conflict
+      - id: check-yaml
+      - id: check-toml
+      - id: check-added-large-files
+        args: [--maxkb=512]
+      - id: detect-private-key
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.6
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.14.1
+    hooks:
+      - id: mypy
+        pass_filenames: false
+        args: [--strict]
+        additional_dependencies:
+          - fastapi>=0.115
+          - pydantic>=2.9
+          - pydantic-settings>=2.6
+          - structlog>=24.4
+          - opentelemetry-api>=1.28
+          - opentelemetry-sdk>=1.28
+          - pytest>=8.3
+          - httpx>=0.27
+
+  # Conventional Commits are required (CLAUDE.md §3.4).
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v4.0.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]
