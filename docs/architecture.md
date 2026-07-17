@@ -449,7 +449,7 @@ flowchart LR
 **Decision:** The application and worker are Python 3.12 with FastAPI.
 **Status:** Accepted.
 **Why:** Fast to build and maintain, excellent ecosystem for ecommerce/Stripe/Azure, strong typing available via Pydantic v2 + mypy. At this scale the GIL and image size are non-issues (one process, 2–3 replicas). Velocity and one-language simplicity win.
-**Consequences:** ~80–120MB images and a runtime to ship (vs a Go static binary). Acceptable at our replica count. CPU-bound work (none expected) would need a process pool — revisit only if it appears.
+**Consequences:** ~160MB images and a runtime to ship (vs a ~15MB Go static binary) — measured on F0.1, see §17.3. Acceptable at our replica count. CPU-bound work (none expected) would need a process pool — revisit only if it appears.
 
 ### ADR-004: Single PostgreSQL database with table-prefix ownership
 
@@ -629,22 +629,61 @@ Pragmatic layering: `api → service → domain`, with `repository` implementing
 
 ### 17.3 Dockerfile pattern
 
+One image serves both processes: the API runs the default `CMD`; the worker runs
+the same image with `arq app.worker.main.WorkerSettings`.
+
 ```dockerfile
 # syntax=docker/dockerfile:1.7
-FROM python:3.12-slim AS base
-ENV PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1
-RUN pip install uv
-WORKDIR /app
-COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev
-COPY . .
+FROM python:3.12-slim AS builder
 
-# API image runs uvicorn; worker image runs arq — same base, different CMD.
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_PYTHON_DOWNLOADS=never
+
+RUN pip install --no-cache-dir uv
+WORKDIR /app
+
+# Dependency layer — cached until the lockfile changes. Installing without the
+# project keeps this layer independent of application source.
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev --no-install-project
+
+# Application layer.
+COPY README.md ./
+COPY app ./app
+RUN uv sync --frozen --no-dev
+
+
+FROM python:3.12-slim AS runtime
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PATH="/app/.venv/bin:$PATH"
+
+RUN useradd --create-home --uid 1001 appuser
+WORKDIR /app
+COPY --from=builder --chown=appuser:appuser /app /app
+USER appuser
+
 EXPOSE 8080
-CMD ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
 ```
 
-Result: ~100MB image, runs as non-root in Container Apps.
+Two details are load-bearing:
+
+- **Multi-stage is what keeps the image small.** `uv` and `pip` live in the
+  builder and never reach the runtime layer. Measured on F0.1: **308MB
+  single-stage → 162MB multi-stage.** `python:3.12-slim` is ~120MB of that, so
+  ~160MB is the realistic floor for this base; going lower means Alpine or
+  distroless, which we have not judged worth the friction.
+- **`--no-install-project` in the dependency layer.** `uv sync` builds the local
+  package, so without it the dependency layer needs application source and its
+  cache is invalidated by every code edit.
+
+Requires BuildKit for the `# syntax=` directive (`DOCKER_BUILDKIT=1`, which the
+Makefile's `build` target sets).
 
 ### 17.4 Conventions
 

@@ -115,9 +115,9 @@ If you hold that discipline, extracting `inventory` into its own service later i
 | Testing | **pytest** + **testcontainers** (real Postgres/Redis) | testify |
 | Lint/format | **ruff** + **mypy** (strict) | golangci-lint |
 | Packaging | **uv** | go modules |
-| Container | python:3.12-slim multi-stage (~80–120MB) | distroless (~15MB) |
+| Container | python:3.12-slim multi-stage (~160MB) | distroless (~15MB) |
 
-The one honest tradeoff: container images are ~80–120MB vs Go's ~15MB, and you carry a runtime. At 2–3 replicas this is noise.
+The one honest tradeoff: container images are ~160MB vs Go's ~15MB, and you carry a runtime. At 2–3 replicas this is noise.
 
 ---
 
