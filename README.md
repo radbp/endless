@@ -35,7 +35,7 @@ Check it:
 
 ```bash
 curl localhost:8080/healthz        # {"status":"ok","service":"endless-api","version":"0.1.0"}
-curl localhost:8080/readyz
+curl localhost:8080/readyz         # {"status":"ok","checks":{"postgres":"ok","redis":"ok"}}
 open http://localhost:8080/docs    # interactive Swagger UI
 docker compose ps                  # all three should read "healthy"
 ```
@@ -48,7 +48,9 @@ Tear down with `docker compose down` (add `-v` to also drop the Postgres and Red
 | `postgres` | 5432 | Postgres 16 — `endless` / `endless` / db `endless` |
 | `redis` | 6379 | Redis 7, append-only on |
 
-> The API does not connect to Postgres or Redis yet — those pools are wired in **F0.6**, which is why `/readyz` reports an empty `checks` object. They run now so the wiring has something to talk to the moment it lands.
+> `/readyz` probes Postgres and Redis and returns `503` / `"degraded"` if either
+> is unreachable; `/healthz` stays independent of dependency health. The idempotency
+> middleware, transactional outbox, and auth land in **F0.6 Slice B**.
 
 ## Quickstart — hot reload (day-to-day loop)
 
@@ -76,6 +78,8 @@ make help            # list every target
 make check           # lint + type + contracts + test (what CI runs)
 make test            # unit tests — no env vars, no Docker required
 make integration     # integration tests (real Postgres/Redis via testcontainers)
+make migrate         # apply Alembic migrations up to head
+make revision m="…"  # autogenerate a migration from model changes
 make build           # build the Docker image
 make format          # apply ruff autofixes + formatting
 make down            # stop the local stack
@@ -103,7 +107,13 @@ The rule that holds it together: a module reaches another **only** through that 
 
 ## Status
 
-Phase 0 — foundations. Ticket **F0.1** (scaffolding) is complete; the app boots and serves `/healthz` and `/readyz`. Persistence, the event bus, the outbox, idempotency, and auth arrive in **F0.6**; CI in **F0.2**; Azure infra in **F0.3**–**F0.5**.
+Phase 0 — foundations. **F0.1** (scaffolding) and **F0.6 Slice A** are complete:
+the app boots, opens pooled async Postgres and Redis connections, and `/readyz`
+probes both. The platform ships the async DB layer (session + single-transaction
+helper), the in-process event bus, an injectable clock, and an initialized
+Alembic history. **F0.6 Slice B** (transactional outbox, idempotency middleware,
+auth, Arq worker, real OTel export) is next, then CI in **F0.2** and Azure infra
+in **F0.3**–**F0.5**.
 
 ## License
 
