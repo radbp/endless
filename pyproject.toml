@@ -11,10 +11,15 @@ dependencies = [
     "structlog>=24.4",
     "opentelemetry-api>=1.28",
     "opentelemetry-sdk>=1.28",
+    # Persistence + cache (F0.6 Slice A). Async engine, driver, migrations, Redis.
+    "sqlalchemy[asyncio]>=2.0.36",
+    "asyncpg>=0.30",
+    "alembic>=1.14",
+    "redis>=5.2",
 ]
 
-# Persistence, cache, worker, and auth dependencies land with the modules that
-# wire them: app/platform/{db,events,outbox,idempotency,auth} in F0.6.
+# Outbox drain, idempotency, auth, worker, and real OTel export land in F0.6
+# Slice B, which adds arq, pyjwt, and azure-monitor-opentelemetry.
 
 [dependency-groups]
 dev = [
@@ -26,6 +31,8 @@ dev = [
     "httpx>=0.27",
     "import-linter>=2.1",
     "pre-commit>=4.0",
+    # Integration tests spin up real Postgres/Redis (CLAUDE.md §6).
+    "testcontainers[postgres,redis]>=4.9",
 ]
 
 [build-system]
@@ -84,6 +91,11 @@ disallow_any_unimported = true
 show_error_codes = true
 pretty = true
 files = ["app", "tests"]
+
+# testcontainers ships no type stubs or py.typed marker.
+[[tool.mypy.overrides]]
+module = ["testcontainers.*"]
+ignore_missing_imports = true
 
 # ---------------------------------------------------------------------------
 # pytest (CLAUDE.md §6)
