@@ -36,6 +36,20 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     """Root log level, e.g. DEBUG / INFO / WARNING."""
 
+    database_url: str = "postgresql+asyncpg://endless:endless@localhost:5432/endless"
+    """Async SQLAlchemy DSN. Defaults to the docker-compose Postgres; deployed
+    environments inject the Key Vault value (CLAUDE.md §1.3)."""
+
+    redis_url: str = "redis://localhost:6379/0"
+    """Redis DSN for cache, idempotency keys, and the Arq queue. Defaults to the
+    docker-compose Redis."""
+
+    db_pool_size: int = 5
+    """Baseline connections kept open per process by the async engine pool."""
+
+    db_max_overflow: int = 10
+    """Extra connections the pool may open transiently under load."""
+
     @property
     def is_local(self) -> bool:
         """True when running against docker-compose rather than Azure."""

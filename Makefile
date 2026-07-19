@@ -26,7 +26,15 @@ dev: up ## Run the API with reload against local Postgres/Redis
 
 .PHONY: worker
 worker: ## Run the Arq worker
-	@echo "The worker entrypoint arrives in F0.6 (app/worker/main.py)."
+	@echo "The worker entrypoint arrives in F0.6 Slice B (app/worker/main.py)."
+
+.PHONY: migrate
+migrate: ## Apply Alembic migrations up to head
+	$(UV) run alembic upgrade head
+
+.PHONY: revision
+revision: ## Autogenerate a migration: make revision m="add catalog_products"
+	$(UV) run alembic revision --autogenerate -m "$(m)"
 
 .PHONY: lint
 lint: ## ruff check + format --check

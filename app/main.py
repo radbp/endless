@@ -9,11 +9,13 @@ from contextlib import asynccontextmanager
 from typing import Literal
 
 import structlog
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
 from pydantic import BaseModel
 
+from app.platform.db import Database
 from app.platform.logging import configure_logging
 from app.platform.otel import setup_telemetry, shutdown_telemetry
+from app.platform.redis import RedisClient
 from app.platform.settings import Settings, get_settings
 
 logger = structlog.get_logger(__name__)
@@ -36,16 +38,25 @@ class ReadyResponse(BaseModel):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    """Start and stop process-wide resources."""
+    """Start and stop process-wide resources.
+
+    The DB engine and Redis pool are created lazily — neither connects here, so
+    the app boots even while Postgres or Redis is still coming up. Actual
+    reachability is reported by ``/readyz``.
+    """
     settings = get_settings()
     configure_logging(settings)
     setup_telemetry(settings)
+
+    app.state.db = Database.create(settings)
+    app.state.redis = RedisClient.create(settings)
     logger.info("app.startup", version=settings.version)
 
-    # TODO(F0.6): open the DB engine and Redis pool here, close them on shutdown.
     yield
 
     logger.info("app.shutdown")
+    await app.state.db.dispose()
+    await app.state.redis.aclose()
     shutdown_telemetry()
 
 
@@ -65,16 +76,37 @@ def register_routes(app: FastAPI, settings: Settings) -> None:
             version=settings.version,
         )
 
-    @app.get("/readyz", response_model=ReadyResponse, tags=["ops"])
-    async def readyz() -> ReadyResponse:
-        """Readiness probe.
+    @app.get(
+        "/readyz",
+        response_model=ReadyResponse,
+        tags=["ops"],
+        responses={503: {"model": ReadyResponse, "description": "A dependency is unreachable"}},
+    )
+    async def readyz(request: Request, response: Response) -> ReadyResponse:
+        """Readiness probe: reports whether Postgres and Redis are reachable.
 
-        Reports `ok` with no dependency checks until the DB and Redis pools are
-        wired in F0.6, at which point each is probed and reported here.
+        Each dependency is probed independently; a single failure flips the
+        overall status to ``degraded`` and the response to ``503`` so the
+        orchestrator stops routing traffic, while the body still reports which
+        checks passed. Kept off the liveness path so a transient dependency blip
+        does not get the container killed (architecture §17.4).
         """
-        # TODO(F0.6): probe Postgres and Redis; return "degraded" on failure.
+        db: Database = request.app.state.db
+        redis: RedisClient = request.app.state.redis
+
         checks: dict[str, str] = {}
-        return ReadyResponse(status="ok", checks=checks)
+        for name, probe in (("postgres", db.ping), ("redis", redis.ping)):
+            try:
+                await probe()
+                checks[name] = "ok"
+            except Exception as exc:  # probe reports failure, never raises
+                checks[name] = "error"
+                logger.warning("readyz.check_failed", check=name, error=str(exc))
+
+        healthy = all(v == "ok" for v in checks.values())
+        if not healthy:
+            response.status_code = 503
+        return ReadyResponse(status="ok" if healthy else "degraded", checks=checks)
 
 
 def create_app() -> FastAPI:
