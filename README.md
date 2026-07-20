@@ -45,12 +45,13 @@ Tear down with `docker compose down` (add `-v` to also drop the Postgres and Red
 | Service | Port | Notes |
 |---|---|---|
 | `api` | 8080 | FastAPI, built from `Dockerfile`, runs non-root |
+| `worker` | — | Arq worker (same image): drains the outbox, runs scheduled jobs |
 | `postgres` | 5432 | Postgres 16 — `endless` / `endless` / db `endless` |
 | `redis` | 6379 | Redis 7, append-only on |
 
 > `/readyz` probes Postgres and Redis and returns `503` / `"degraded"` if either
-> is unreachable; `/healthz` stays independent of dependency health. The idempotency
-> middleware, transactional outbox, and auth land in **F0.6 Slice B**.
+> is unreachable; `/healthz` stays independent of dependency health. The
+> idempotency middleware and Entra auth land in **F0.6 Slice B, part 2**.
 
 ## Quickstart — hot reload (day-to-day loop)
 
@@ -80,6 +81,7 @@ make test            # unit tests — no env vars, no Docker required
 make integration     # integration tests (real Postgres/Redis via testcontainers)
 make migrate         # apply Alembic migrations up to head
 make revision m="…"  # autogenerate a migration from model changes
+make worker          # run the Arq worker on the host (outbox drain + jobs)
 make build           # build the Docker image
 make format          # apply ruff autofixes + formatting
 make down            # stop the local stack
@@ -107,13 +109,14 @@ The rule that holds it together: a module reaches another **only** through that 
 
 ## Status
 
-Phase 0 — foundations. **F0.1** (scaffolding) and **F0.6 Slice A** are complete:
-the app boots, opens pooled async Postgres and Redis connections, and `/readyz`
-probes both. The platform ships the async DB layer (session + single-transaction
-helper), the in-process event bus, an injectable clock, and an initialized
-Alembic history. **F0.6 Slice B** (transactional outbox, idempotency middleware,
-auth, Arq worker, real OTel export) is next, then CI in **F0.2** and Azure infra
-in **F0.3**–**F0.5**.
+Phase 0 — foundations. **F0.1** (scaffolding), **F0.6 Slice A**, and **Slice B
+part 1** are complete. The app boots, opens pooled async Postgres and Redis
+connections, and `/readyz` probes both. The platform ships the async DB layer
+(session + single-transaction helper), the in-process event bus, an injectable
+clock, an initialized Alembic history, the **transactional outbox** with a
+`SKIP LOCKED` drain, the **Arq worker** (advisory-lock-guarded), and **Azure
+Monitor** export. Still to come in **Slice B part 2**: the idempotency middleware
+and Entra JWT auth. Then CI in **F0.2** and Azure infra in **F0.3**–**F0.5**.
 
 ## License
 

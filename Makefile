@@ -25,8 +25,8 @@ dev: up ## Run the API with reload against local Postgres/Redis
 	$(UV) run uvicorn app.main:app --reload --host 0.0.0.0 --port 8080
 
 .PHONY: worker
-worker: ## Run the Arq worker
-	@echo "The worker entrypoint arrives in F0.6 Slice B (app/worker/main.py)."
+worker: up ## Run the Arq worker (outbox drain + scheduled jobs)
+	$(UV) run arq app.worker.main.WorkerSettings
 
 .PHONY: migrate
 migrate: ## Apply Alembic migrations up to head
