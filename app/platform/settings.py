@@ -50,6 +50,23 @@ class Settings(BaseSettings):
     db_max_overflow: int = 10
     """Extra connections the pool may open transiently under load."""
 
+    applicationinsights_connection_string: str | None = None
+    """Azure Monitor / App Insights connection string. When unset (local), OTel
+    stays a no-op and nothing is exported. Supplied by Key Vault in Azure."""
+
+    outbox_max_attempts: int = 5
+    """Delivery attempts before an outbox message is dead-lettered (architecture
+    §8.3)."""
+
+    outbox_batch_size: int = 100
+    """Maximum outbox rows a single drain pass processes per registered table."""
+
+    outbox_backoff_base_seconds: float = 5.0
+    """Base delay for the outbox retry backoff; doubles each attempt, with jitter."""
+
+    outbox_backoff_cap_seconds: float = 3600.0
+    """Ceiling on the outbox retry backoff, before jitter."""
+
     @property
     def is_local(self) -> bool:
         """True when running against docker-compose rather than Azure."""

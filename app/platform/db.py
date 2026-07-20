@@ -138,6 +138,31 @@ class Database:
             await session.execute(text("SELECT 1"))
         return True
 
+    @asynccontextmanager
+    async def advisory_lock(self, key: int) -> AsyncIterator[bool]:
+        """Try to hold a session-level Postgres advisory lock for ``key``.
+
+        Yields ``True`` if this process acquired the lock, ``False`` if another
+        holder has it. Used to make singleton background jobs (the outbox drain,
+        the reservation sweep) safe to run on more than one worker replica: only
+        the holder does the work; the rest skip. The lock is held on a dedicated
+        connection for the duration of the block and released on exit — or when
+        the connection drops, if the worker crashes.
+        """
+        from sqlalchemy import text
+
+        async with self._sessionmaker() as session:
+            acquired = bool(
+                (
+                    await session.execute(text("SELECT pg_try_advisory_lock(:key)"), {"key": key})
+                ).scalar_one()
+            )
+            try:
+                yield acquired
+            finally:
+                if acquired:
+                    await session.execute(text("SELECT pg_advisory_unlock(:key)"), {"key": key})
+
     async def dispose(self) -> None:
         """Close all pooled connections. Call once during app shutdown."""
         await self._engine.dispose()

@@ -65,13 +65,23 @@ services:
       timeout: 3s
       retries: 10
 
-  # The worker runs this same image with a different command. Uncommented in
-  # F0.6, when app/worker/main.py and the outbox drain exist.
-  #
-  # worker:
-  #   image: endless:dev
-  #   command: ["arq", "app.worker.main.WorkerSettings"]
-  #   depends_on: [postgres, redis]
+  # The worker runs this same image with a different command: it drains the
+  # outbox and runs scheduled jobs (F0.6 Slice B).
+  worker:
+    build:
+      context: .
+    image: endless:dev
+    command: ["arq", "app.worker.main.WorkerSettings"]
+    environment:
+      ENDLESS_ENVIRONMENT: local
+      ENDLESS_LOG_LEVEL: INFO
+      ENDLESS_DATABASE_URL: postgresql+asyncpg://endless:endless@postgres:5432/endless
+      ENDLESS_REDIS_URL: redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   # Frontends are not written yet — they arrive as their own tickets and get
   # their own Dockerfiles. Adding services for them now would only break
