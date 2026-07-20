@@ -9,17 +9,23 @@ dependencies = [
     "pydantic>=2.9",
     "pydantic-settings>=2.6",
     "structlog>=24.4",
-    "opentelemetry-api>=1.28",
-    "opentelemetry-sdk>=1.28",
+    # Pinned to the 1.36 line: azure-monitor-opentelemetry's exporter is built
+    # against ~=1.36 and breaks on 1.44+ (LogData moved out of sdk._logs). This
+    # also aligns the instrumentation packages to the matching 0.57b0 series.
+    "opentelemetry-api>=1.36,<1.37",
+    "opentelemetry-sdk>=1.36,<1.37",
     # Persistence + cache (F0.6 Slice A). Async engine, driver, migrations, Redis.
     "sqlalchemy[asyncio]>=2.0.36",
     "asyncpg>=0.30",
     "alembic>=1.14",
     "redis>=5.2",
+    # Worker + telemetry export (F0.6 Slice B). Arq drains the outbox; Azure
+    # Monitor exports traces/metrics/logs when a connection string is configured.
+    "arq>=0.26",
+    "azure-monitor-opentelemetry>=1.6",
 ]
 
-# Outbox drain, idempotency, auth, worker, and real OTel export land in F0.6
-# Slice B, which adds arq, pyjwt, and azure-monitor-opentelemetry.
+# Idempotency middleware and Entra JWT auth (F0.6 Slice B) add pyjwt[crypto].
 
 [dependency-groups]
 dev = [
@@ -34,6 +40,16 @@ dev = [
     # Integration tests spin up real Postgres/Redis (CLAUDE.md §6).
     "testcontainers[postgres,redis]>=4.9",
 ]
+
+# cryptography is pulled in transitively (redis 5.x -> pyjwt[crypto], and our own
+# Entra JWT validation in F0.6 Slice B). Versions >= 43 ship only
+# macosx_10_9_universal2 wheels; this repo's dev machine resolves against a
+# macosx_10_12_x86_64 interpreter with no OpenSSL/pkg-config toolchain, so newer
+# versions fall back to a source build that cannot compile. 42.0.8 ships an exact
+# macosx_10_12_x86_64 wheel (and manylinux wheels for Docker/CI) and is identical
+# for RS256 verification. Constrain, don't add a direct dependency.
+[tool.uv]
+constraint-dependencies = ["cryptography>=42.0.8,<43"]
 
 [build-system]
 requires = ["hatchling"]
@@ -95,6 +111,11 @@ files = ["app", "tests"]
 # testcontainers ships no type stubs or py.typed marker.
 [[tool.mypy.overrides]]
 module = ["testcontainers.*"]
+ignore_missing_imports = true
+
+# azure-monitor-opentelemetry ships no py.typed marker.
+[[tool.mypy.overrides]]
+module = ["azure.monitor.*"]
 ignore_missing_imports = true
 
 # ---------------------------------------------------------------------------
