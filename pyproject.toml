@@ -6,8 +6,8 @@ requires-python = ">=3.12,<3.13"
 dependencies = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.32",
-    "pydantic>=2.9",
-    "pydantic-settings>=2.6",
+    "pydantic>=2.14.0",
+    "pydantic-settings>=2.15.0",
     "structlog>=24.4",
     # Pinned to the 1.36 line: azure-monitor-opentelemetry's exporter is built
     # against ~=1.36 and breaks on 1.44+ (LogData moved out of sdk._logs). This
@@ -16,8 +16,8 @@ dependencies = [
     "opentelemetry-sdk>=1.36,<1.37",
     # Persistence + cache (F0.6 Slice A). Async engine, driver, migrations, Redis.
     "sqlalchemy[asyncio]>=2.0.36",
-    "asyncpg>=0.30",
-    "alembic>=1.14",
+    "asyncpg>=0.32.0",
+    "alembic>=1.20.0",
     "redis>=5.2",
     # Worker + telemetry export (F0.6 Slice B). Arq drains the outbox; Azure
     # Monitor exports traces/metrics/logs when a connection string is configured.
@@ -29,14 +29,14 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    "ruff>=0.8",
-    "mypy>=1.13",
+    "ruff>=0.17.0",
+    "mypy>=2.4.0",
     "pytest>=8.3",
     "pytest-asyncio>=0.24",
     "pytest-cov>=6.0",
     "httpx>=0.27",
-    "import-linter>=2.1",
-    "pre-commit>=4.0",
+    "import-linter>=2.15",
+    "pre-commit>=4.6.2",
     # Integration tests spin up real Postgres/Redis (CLAUDE.md §6).
     "testcontainers[postgres,redis]>=4.9",
 ]
